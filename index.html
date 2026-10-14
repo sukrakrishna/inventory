@@ -1,0 +1,777 @@
+<title>Inventory Stock Alert System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a ration-shop stock ledger. Deep teal title band, then ruled ledger-style sections, with a live threshold-check prototype in the middle. */
+:root {
+  --bg: #EDF3F2;
+  --surface: #FFFFFF;
+  --ink: #0B2525;
+  --muted: #4A6362;
+  --line: #C9D8D6;
+  --accent: #0F6B66;
+  --accent-soft: #DCEBE9;
+  --gold: #9A5F0F;
+  --gold-fill: #E0A35A;
+  --ok: #1F7A4D;
+  --crit: #B3341F;
+  --crit-soft: #F7E1DC;
+  --band-bg: #0E4F4B;
+  --band-ink: #EAF4F2;
+  --band-muted: #A7C9C5;
+  --on-accent: #FFFFFF;
+  --font-display: "Archivo", "Arial Narrow", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #081515; --surface: #0F2020; --ink: #E3EEEC; --muted: #93ABA8; --line: #224040;
+    --accent: #45B8AE; --accent-soft: #123432; --gold: #E3A95F; --gold-fill: #E3A95F;
+    --ok: #55C48B; --crit: #F08670; --crit-soft: #3A1C17;
+    --band-bg: #0C3735; --band-ink: #E3EEEC; --band-muted: #93ABA8; --on-accent: #06201E;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #081515; --surface: #0F2020; --ink: #E3EEEC; --muted: #93ABA8; --line: #224040;
+  --accent: #45B8AE; --accent-soft: #123432; --gold: #E3A95F; --gold-fill: #E3A95F;
+  --ok: #55C48B; --crit: #F08670; --crit-soft: #3A1C17;
+  --band-bg: #0C3735; --band-ink: #E3EEEC; --band-muted: #93ABA8; --on-accent: #06201E;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  margin: 0;
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.05; }
+h2 { font-size: clamp(1.9rem, 4.2vw, 2.9rem); font-weight: 800; font-stretch: 75%; text-transform: uppercase; letter-spacing: 0.01em; }
+h3 { font-size: 1.25rem; font-weight: 700; font-stretch: 85%; letter-spacing: 0.01em; line-height: 1.2; }
+p { margin: 0; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--gold-fill); outline-offset: 2px; }
+
+.wrap {
+  max-width: 1120px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.eyebrow {
+  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold);
+}
+.section { padding-block: 64px; border-top: 1px solid var(--line); }
+.section-head { display: grid; gap: 12px; margin-bottom: 36px; max-width: 46rem; }
+.section-head p { color: var(--muted); font-size: 1.05rem; max-width: 62ch; }
+
+/* top nav */
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  background: var(--band-bg); color: var(--band-ink);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.nav .wrap { display: flex; align-items: center; gap: 24px; height: 52px; }
+.nav b { font-family: var(--font-display); font-stretch: 75%; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; font-size: 0.95rem; }
+.nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+.nav ul::-webkit-scrollbar { display: none; }
+.nav a { display: block; padding: 6px 10px; font-size: 0.85rem; text-decoration: none; color: var(--band-muted); white-space: nowrap; border-radius: 3px; }
+.nav a:hover { color: var(--band-ink); background: rgba(255,255,255,0.08); }
+@media (max-width: 640px) { .nav b { display: none; } }
+
+/* hero */
+.hero { background: var(--band-bg); color: var(--band-ink); padding-block: 72px 56px; }
+.hero .eyebrow { color: var(--gold-fill); }
+.hero h1 {
+  font-size: clamp(2.8rem, 9vw, 6.4rem); font-weight: 900; font-stretch: 62%;
+  text-transform: uppercase; letter-spacing: 0.005em; line-height: 0.92; margin-top: 18px;
+}
+.hero h1 span { color: var(--gold-fill); display: block; font-size: 0.46em; font-stretch: 75%; letter-spacing: 0.08em; margin-top: 14px; line-height: 1.1; }
+.hero .lead { font-size: 1.15rem; color: var(--band-muted); max-width: 52ch; margin-top: 28px; }
+.commodities { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; padding: 0; list-style: none; }
+.commodities li { border: 1px solid rgba(255,255,255,0.28); padding: 8px 14px; font-family: var(--font-mono); font-size: 0.85rem; border-radius: 2px; }
+.commodities li small { color: var(--band-muted); margin-left: 6px; font-size: 0.78rem; }
+.team { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 20px; margin-top: 56px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.22); }
+.team div { min-width: 0; }
+.team .name { font-weight: 600; font-size: 1.05rem; display: block; }
+.team .roll { font-family: var(--font-mono); font-size: 0.82rem; color: var(--band-muted); }
+.affil { margin-top: 20px; color: var(--band-muted); font-size: 0.92rem; }
+
+/* generic lists / cards */
+.grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); padding: 24px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card p { color: var(--muted); }
+.tag { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+
+.ruled { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.ruled li { display: grid; grid-template-columns: 2.2rem 1fr; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.ruled li::before { content: "\2192"; color: var(--gold); font-family: var(--font-mono); }
+.ruled.problems li::before { content: "\00D7"; color: var(--crit); font-weight: 600; font-size: 1.2rem; line-height: 1.4; }
+.ruled.checks li::before { content: "\2713"; color: var(--ok); font-weight: 600; }
+.ruled.future li::before { content: "\25CB"; color: var(--gold); }
+.callout { margin-top: 28px; padding: 18px 22px; border-left: 4px solid var(--accent); background: var(--accent-soft); max-width: 62ch; }
+
+/* objectives numbered */
+.objectives { counter-reset: obj; list-style: none; margin: 0; padding: 0; display: grid; gap: 0 40px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); border-top: 1px solid var(--line); }
+.objectives li { counter-increment: obj; display: grid; grid-template-columns: 3rem 1fr; gap: 8px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.objectives li::before { content: counter(obj, decimal-leading-zero); font-family: var(--font-mono); color: var(--gold); font-weight: 500; }
+
+/* modules */
+.module ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.module li { padding-left: 16px; position: relative; color: var(--muted); font-size: 0.95rem; }
+.module li::before { content: ""; position: absolute; left: 0; top: 0.65em; width: 6px; height: 2px; background: var(--gold-fill); }
+
+/* workflow */
+.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); counter-reset: step; border-left: 1px solid var(--line); }
+.flow li { counter-increment: step; padding: 18px 20px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); border-top: 1px solid var(--line); margin-top: -1px; background: var(--surface); display: grid; gap: 6px; align-content: start; }
+.flow li::before { content: "Step " counter(step); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+.flow li b { font-weight: 600; }
+.flow li.alert-step { background: var(--crit-soft); }
+
+/* architecture */
+.layers { display: grid; gap: 10px; max-width: 520px; }
+.layers div { background: var(--surface); border: 1px solid var(--line); padding: 14px 18px; display: grid; grid-template-columns: 2rem 1fr; gap: 10px; align-items: center; }
+.layers div:nth-child(3) { border-color: var(--crit); }
+.layers span { font-family: var(--font-mono); color: var(--gold); }
+.layers div + div { position: relative; }
+.layers div + div::before { content: ""; position: absolute; left: 24px; top: -11px; height: 10px; border-left: 1px dashed var(--muted); }
+.arch { display: grid; gap: 40px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); align-items: start; }
+.stack { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.stack div { display: grid; grid-template-columns: 7.5rem 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.stack dt, .stack dd { margin: 0; }
+.stack dt { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); padding-top: 2px; }
+.stack-note { margin-top: 16px; font-weight: 600; color: var(--accent); }
+
+/* tables */
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--accent-soft); }
+td:first-child { font-weight: 600; }
+td code, .field { font-family: var(--font-mono); font-size: 0.88rem; color: var(--accent); }
+.table-title { font-family: var(--font-display); font-stretch: 85%; font-weight: 700; font-size: 1.15rem; margin-bottom: 10px; }
+.tables { display: grid; gap: 28px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); }
+.tables > div { min-width: 0; }
+
+/* classes */
+.classes { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.class { background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.class header { background: var(--band-bg); color: var(--band-ink); padding: 10px 16px; font-family: var(--font-display); font-weight: 700; font-stretch: 85%; font-size: 1.1rem; }
+.class header em { display: block; font-style: normal; font-family: var(--font-mono); font-size: 0.74rem; color: var(--gold-fill); letter-spacing: 0.04em; font-weight: 400; }
+.class ul { list-style: none; margin: 0; padding: 12px 16px 14px; font-family: var(--font-mono); font-size: 0.88rem; display: grid; gap: 4px; }
+.class ul.methods { border-top: 1px dashed var(--line); color: var(--accent); }
+.class-note { margin-top: 18px; color: var(--muted); font-size: 0.95rem; }
+
+/* demo */
+.demo { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.panel > h3 { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.panel > h3 small { font-family: var(--font-mono); font-weight: 400; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.panel-body { padding: 20px; display: grid; gap: 22px; }
+.stock-row { display: grid; gap: 8px; }
+.stock-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.stock-top b { font-weight: 600; }
+.qty { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.92rem; }
+.qty small { color: var(--muted); }
+.gauge { position: relative; height: 12px; background: var(--line); }
+.gauge .fill { height: 100%; background: var(--accent); transition: width 0.35s ease; }
+.gauge .tick { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); }
+.stock-row.low .fill { background: var(--crit); }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 8px; border: 1px solid currentColor; font-weight: 500; }
+.pill.ok { color: var(--ok); }
+.pill.low { color: var(--crit); }
+.pill.pending { color: var(--crit); background: var(--crit-soft); }
+.pill.progress { color: var(--gold); }
+.pill.done { color: var(--ok); }
+.legend { font-size: 0.82rem; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.legend i { display: inline-block; width: 2px; height: 14px; background: var(--ink); }
+
+form { display: grid; gap: 14px; padding-top: 18px; border-top: 1px solid var(--line); }
+.fields { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+label, legend { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; padding: 0; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+select, input[type="number"] {
+  width: 100%; font: inherit; font-size: 1rem; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); padding: 10px 12px; border-radius: 0; min-height: 44px;
+}
+.seg { display: flex; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { margin: 0; flex: 1; text-align: center; border: 1px solid var(--line); padding: 11px 10px; cursor: pointer; font-size: 0.8rem; color: var(--ink); background: var(--bg); min-height: 44px; }
+.seg label + label { border-left: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.seg input:focus-visible + label { outline: 3px solid var(--gold-fill); outline-offset: 2px; }
+button { font: inherit; cursor: pointer; border-radius: 0; min-height: 44px; }
+.btn { background: var(--accent); color: var(--on-accent); border: 0; padding: 10px 20px; font-weight: 600; justify-self: start; }
+.btn:hover { filter: brightness(1.08); }
+.btn-sm { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 6px 12px; font-size: 0.85rem; min-height: 36px; font-weight: 600; }
+.btn-sm:hover { background: var(--accent-soft); }
+.msg { min-height: 1.6em; font-size: 0.92rem; }
+.msg.err { color: var(--crit); }
+.msg.good { color: var(--ok); }
+.msg.warn { color: var(--crit); font-weight: 600; }
+
+.alert-list, .log-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+.alert-list li, .log-list li { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.alert-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.alert-meta { font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.log-list li { grid-template-columns: 4.2rem 1fr auto; align-items: baseline; gap: 10px; font-size: 0.92rem; }
+.log-list .t { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+.log-list .d { font-family: var(--font-mono); font-size: 0.85rem; font-variant-numeric: tabular-nums; text-align: right; }
+.log-list .d.minus { color: var(--crit); }
+.log-list .d.plus { color: var(--ok); }
+.empty { color: var(--muted); padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.sub { font-family: var(--font-display); font-stretch: 85%; font-weight: 700; font-size: 1.05rem; margin-bottom: 10px; }
+.sample { font-size: 0.85rem; color: var(--muted); margin-top: 20px; }
+
+/* conclusion */
+.closing { background: var(--band-bg); color: var(--band-ink); padding-block: 72px; }
+.closing h2 { max-width: 14ch; }
+.closing p { max-width: 62ch; margin-top: 24px; font-size: 1.1rem; color: var(--band-muted); }
+.closing p + p { margin-top: 14px; }
+.closing .eyebrow { color: var(--gold-fill); display: block; margin-bottom: 14px; }
+footer { padding-block: 28px; color: var(--muted); font-size: 0.88rem; }
+</style>
+
+<nav class="nav" aria-label="Page sections">
+  <div class="wrap">
+    <b>Stock Alert</b>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#problem">Problem</a></li>
+      <li><a href="#solution">Solution</a></li>
+      <li><a href="#demo">Try it</a></li>
+      <li><a href="#design">Design</a></li>
+      <li><a href="#data">Data</a></li>
+      <li><a href="#scope">Scope</a></li>
+      <li><a href="#future">Future</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Object-Oriented Programming in Java &middot; First Review</span>
+    <h1>Inventory Stock Alert System <span>Public Distribution Area</span></h1>
+    <p class="lead">A Java-based platform to monitor ration stock levels and generate automated alerts for public distribution shops.</p>
+    <ul class="commodities" aria-label="Commodities tracked">
+      <li>Rice<small>kg</small></li>
+      <li>Wheat<small>kg</small></li>
+      <li>Sugar<small>kg</small></li>
+      <li>Kerosene<small>litres</small></li>
+    </ul>
+    <div class="team">
+      <div><span class="name">Semmalai S</span><span class="roll">711524BEE052</span></div>
+      <div><span class="name">Subash</span><span class="roll">711524BEE055</span></div>
+      <div><span class="name">Vidhya K</span><span class="roll">711524BEE059</span></div>
+    </div>
+    <p class="affil">Department of Electrical and Electronics Engineering &middot; Kalaignarkarunanidhi Institute of Technology</p>
+  </div>
+</header>
+
+<main>
+  <section class="section" id="overview">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Introduction</span>
+        <h2>What is the project about?</h2>
+        <p>The Inventory Stock Alert System is a Java-based application designed to monitor stock levels of essential commodities (rice, wheat, sugar, kerosene) at public distribution shops. It gives shop staff and supervisors separate access, so shops are restocked on time and stock-outs become rarer.</p>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <span class="tag">Shop staff access</span>
+          <h3>Update stock, view alerts, check history</h3>
+          <p>Staff log in, record the stock issued or received each day, and see which commodities are running low.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Admin / supervisor access</span>
+          <h3>Monitor shops, set thresholds, generate reports</h3>
+          <p>Supervisors see every shop in one place, decide the alert thresholds, and review reports.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="problem">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Problem statement</span>
+        <h2>Why change the traditional approach?</h2>
+        <p>Traditional stock monitoring relies on manual registers, delayed reporting, and reactive restocking.</p>
+      </div>
+      <ul class="ruled problems">
+        <li>Manual stock register maintenance at each shop</li>
+        <li>Delayed detection of shortages until beneficiaries are turned away</li>
+        <li>Errors in manual stock balance calculation</li>
+        <li>No real-time visibility for supervisors across shops</li>
+        <li>Time-consuming stock report preparation</li>
+      </ul>
+      <p class="callout">A computerized stock alert system is needed to prevent shortages and ensure timely replenishment.</p>
+    </div>
+  </section>
+
+  <section class="section" id="solution">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Proposed solution</span>
+        <h2>A centralized stock monitoring platform</h2>
+      </div>
+      <ul class="ruled">
+        <li>Shop staff can log in and update daily stock issued.</li>
+        <li>The system tracks remaining stock for each commodity in real time.</li>
+        <li>An automatic alert is generated when stock falls below the threshold.</li>
+        <li>Supervisors can view stock status across all distribution shops.</li>
+        <li>Stock records can be stored and retrieved for reporting.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="objectives">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Objectives</span>
+        <h2>Project objectives</h2>
+      </div>
+      <ol class="objectives">
+        <li>Develop a user-friendly inventory stock alert system for distribution shops.</li>
+        <li>Automate low-stock detection and alert generation.</li>
+        <li>Maintain commodity-wise stock records for each shop.</li>
+        <li>Calculate and update remaining stock accurately.</li>
+        <li>Reduce shortages and manual monitoring effort.</li>
+        <li>Implement Object-Oriented Programming concepts using Java.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="demo">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Working prototype of the alert logic</span>
+        <h2>Try the threshold check</h2>
+        <p>Record stock issued or received for one commodity. The balance updates, the threshold is checked, and a low-stock alert appears for the supervisor. Wheat starts below its threshold, so one alert is already waiting.</p>
+      </div>
+
+      <div class="demo">
+        <div class="panel">
+          <h3>Shop staff view <small>Sample shop</small></h3>
+          <div class="panel-body">
+            <div id="stock" aria-live="polite"></div>
+            <p class="legend"><i></i> Black marker shows the alert threshold</p>
+            <form id="stock-form" novalidate>
+              <div class="fields">
+                <div>
+                  <label for="item">Commodity</label>
+                  <select id="item"></select>
+                </div>
+                <div>
+                  <label for="qty">Quantity</label>
+                  <input id="qty" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 40">
+                </div>
+              </div>
+              <fieldset>
+                <legend>Entry type</legend>
+                <div class="seg">
+                  <input type="radio" name="kind" id="k-issued" value="issued" checked>
+                  <label for="k-issued">Issued</label>
+                  <input type="radio" name="kind" id="k-received" value="received">
+                  <label for="k-received">Received</label>
+                </div>
+              </fieldset>
+              <button class="btn" type="submit">Update stock</button>
+              <p class="msg" id="msg" role="status"></p>
+            </form>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Supervisor view <small>Alerts and history</small></h3>
+          <div class="panel-body">
+            <div>
+              <p class="sub">Stock alerts</p>
+              <div id="alerts"></div>
+            </div>
+            <div>
+              <p class="sub">Stock update history</p>
+              <ul class="log-list" id="log"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="sample">Sample quantities for demonstration only. Nothing entered here is saved.</p>
+    </div>
+  </section>
+
+  <section class="section" id="workflow">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Process flow</span>
+        <h2>System workflow</h2>
+      </div>
+      <ol class="flow">
+        <li><b>Shop staff login</b></li>
+        <li><b>View current stock</b></li>
+        <li><b>Enter stock issued / received</b></li>
+        <li><b>System updates balance</b></li>
+        <li><b>System checks threshold</b></li>
+        <li class="alert-step"><b>Alert generated if low</b></li>
+        <li><b>Supervisor reviews alert</b></li>
+        <li><b>Replenishment initiated</b></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="design">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">System design</span>
+        <h2>Main modules</h2>
+      </div>
+      <div class="grid">
+        <div class="card module">
+          <span class="tag">Admin</span>
+          <h3>Admin Module</h3>
+          <ul><li>Admin login</li><li>Add / update / delete shops</li><li>View all stock alerts</li><li>Set alert thresholds</li><li>Generate stock reports</li></ul>
+        </div>
+        <div class="card module">
+          <span class="tag">Shop</span>
+          <h3>Shop Module</h3>
+          <ul><li>Shop staff login</li><li>View commodity stock</li><li>Update stock issued / received</li><li>View low-stock alerts</li><li>Check stock history</li></ul>
+        </div>
+        <div class="card module">
+          <span class="tag">Stock</span>
+          <h3>Stock Management</h3>
+          <ul><li>Commodity selection</li><li>Stock quantity entry</li><li>Threshold validation</li><li>Alert status update</li><li>Stock history maintenance</li></ul>
+        </div>
+        <div class="card module">
+          <span class="tag">Report</span>
+          <h3>Report Module</h3>
+          <ul><li>Shop-wise stock report</li><li>Low-stock alert report</li><li>Commodity-wise report</li></ul>
+        </div>
+      </div>
+
+      <div class="section-head" style="margin-top:64px">
+        <span class="eyebrow">System design</span>
+        <h2>Proposed architecture</h2>
+      </div>
+      <div class="arch">
+        <div class="layers" aria-label="Architecture layers, top to bottom">
+          <div><span>1</span>User Interface</div>
+          <div><span>2</span>Java Application Logic</div>
+          <div><span>3</span>Stock Alert Module</div>
+          <div><span>4</span>Database / File Storage</div>
+        </div>
+        <div>
+          <p class="sub">Technologies</p>
+          <dl class="stack">
+            <div><dt>Language</dt><dd>Java</dd></div>
+            <div><dt>Concepts</dt><dd>OOP &middot; Classes &middot; Objects &middot; Inheritance &middot; Encapsulation</dd></div>
+            <div><dt>Interface</dt><dd>Java Swing / Console Interface</dd></div>
+            <div><dt>Database</dt><dd>MySQL / File Handling</dd></div>
+            <div><dt>IDE</dt><dd>Eclipse / IntelliJ IDEA / NetBeans</dd></div>
+          </dl>
+          <p class="stack-note">Start simple: Java Swing + MySQL</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="oop">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Java fundamentals</span>
+        <h2>OOP concepts used</h2>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>OOP concept</th><th>Application in project</th></tr></thead>
+          <tbody>
+            <tr><td>Encapsulation</td><td>Shop and stock details stored inside classes</td></tr>
+            <tr><td>Inheritance</td><td>Admin and ShopStaff classes inherit common User properties</td></tr>
+            <tr><td>Polymorphism</td><td>Different users can perform different operations</td></tr>
+            <tr><td>Abstraction</td><td>Threshold-checking and alert logic hidden through methods</td></tr>
+            <tr><td>Classes &amp; Objects</td><td>Shop, Commodity, StockEntry, and Alert classes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-head" style="margin-top:64px">
+        <span class="eyebrow">Java fundamentals</span>
+        <h2>Proposed classes</h2>
+      </div>
+      <div class="classes">
+        <div class="class">
+          <header>User</header>
+          <ul><li>userId</li><li>name</li><li>username</li><li>password</li></ul>
+        </div>
+        <div class="class">
+          <header>ShopStaff <em>extends User</em></header>
+          <ul><li>shopId</li><li>shopName</li><li>location</li></ul>
+        </div>
+        <div class="class">
+          <header>Admin <em>extends User</em></header>
+          <ul class="methods"><li>approveThreshold()</li><li>manageShops()</li><li>viewAllAlerts()</li></ul>
+        </div>
+        <div class="class">
+          <header>StockItem</header>
+          <ul><li>stockId</li><li>commodityName</li><li>quantity</li><li>thresholdLevel</li><li>lastUpdated</li></ul>
+        </div>
+        <div class="class">
+          <header>StockManagement</header>
+          <ul class="methods"><li>updateStock()</li><li>checkThreshold()</li><li>generateAlert()</li><li>viewStockHistory()</li></ul>
+        </div>
+      </div>
+      <p class="class-note">ShopStaff and Admin extend the common User class. StockManagement operates on StockItem objects.</p>
+    </div>
+  </section>
+
+  <section class="section" id="data">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Data design</span>
+        <h2>Sample database tables</h2>
+      </div>
+      <div class="tables">
+        <div>
+          <p class="table-title">Shop table</p>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Field</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td class="field">shop_id</td><td>Unique shop ID</td></tr>
+                <tr><td class="field">shop_name</td><td>Shop name</td></tr>
+                <tr><td class="field">location</td><td>Shop location</td></tr>
+                <tr><td class="field">username</td><td>Login username</td></tr>
+                <tr><td class="field">password</td><td>Login password</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <p class="table-title">Stock table</p>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Field</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td class="field">stock_id</td><td>Unique stock entry ID</td></tr>
+                <tr><td class="field">shop_id</td><td>Shop reference</td></tr>
+                <tr><td class="field">commodity_name</td><td>Rice / Wheat / Sugar / Kerosene</td></tr>
+                <tr><td class="field">quantity_available</td><td>Current stock quantity</td></tr>
+                <tr><td class="field">threshold_level</td><td>Minimum stock before alert</td></tr>
+                <tr><td class="field">last_updated</td><td>Date of last update</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scope">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Scope of the project</span>
+        <h2>What this project covers</h2>
+        <p>The system focuses on core stock alert functionality for distribution shops.</p>
+      </div>
+      <div class="grid grid-2">
+        <div>
+          <p class="tag" style="margin-bottom:12px">Included</p>
+          <ul class="ruled checks">
+            <li>Shop staff registration and login</li>
+            <li>Admin / supervisor login</li>
+            <li>Commodity stock entry</li>
+            <li>Threshold-based low-stock alerts</li>
+            <li>Stock balance tracking</li>
+            <li>Stock update history</li>
+            <li>Basic reports</li>
+          </ul>
+        </div>
+        <div>
+          <p class="tag" style="margin-bottom:12px; color:var(--gold)">Future scope</p>
+          <ul class="ruled future">
+            <li>SMS &amp; Email alerts to supervisors</li>
+            <li>Mobile application</li>
+            <li>Ration card database integration</li>
+            <li>Cloud-based multi-shop dashboard</li>
+            <li>Demand forecasting</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deliverables">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Deliverables</span>
+        <h2>Expected output</h2>
+      </div>
+      <ul class="ruled checks">
+        <li>Provide secure login for shop staff and administrators.</li>
+        <li>Allow shop staff to update daily stock levels.</li>
+        <li>Automatically detect and alert low-stock commodities.</li>
+        <li>Enable admins to monitor stock across all shops.</li>
+        <li>Display stock history and alert status.</li>
+        <li>Reduce shortages and improve distribution efficiency.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="future">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">What comes next</span>
+        <h2>Future enhancement</h2>
+      </div>
+      <div class="grid">
+        <div class="card"><h3>SMS &amp; Email notifications</h3></div>
+        <div class="card"><h3>Ration card integration</h3></div>
+        <div class="card"><h3>Attendance / demand forecasting</h3></div>
+        <div class="card"><h3>Online deployment</h3></div>
+        <div class="card"><h3>Mobile application</h3></div>
+        <div class="card"><h3>Role-based access control</h3></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="closing" id="conclusion">
+  <div class="wrap">
+    <span class="eyebrow">Conclusion</span>
+    <h2>Bringing it all together</h2>
+    <p>The Inventory Stock Alert System aims to provide a simple, efficient, and automated solution for monitoring public distribution stock levels and preventing shortages.</p>
+    <p>By using Java and Object-Oriented Programming concepts, the project will demonstrate practical software development skills while solving a real public distribution problem.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Semmalai S &middot; Subash &middot; Vidhya K &middot; Department of Electrical and Electronics Engineering, Kalaignarkarunanidhi Institute of Technology</div>
+</footer>
+
+<script>
+(function () {
+  var items = [
+    { id: 1, name: 'Rice',     unit: 'kg',     qty: 420, th: 150, cap: 600 },
+    { id: 2, name: 'Wheat',    unit: 'kg',     qty: 110, th: 120, cap: 400 },
+    { id: 3, name: 'Sugar',    unit: 'kg',     qty: 95,  th: 60,  cap: 250 },
+    { id: 4, name: 'Kerosene', unit: 'litres', qty: 140, th: 100, cap: 300 }
+  ];
+  var log = [
+    { t: '09:10', name: 'Rice',  delta: -35, unit: 'kg' },
+    { t: '08:55', name: 'Sugar', delta: -12, unit: 'kg' },
+    { t: '08:42', name: 'Wheat', delta: -28, unit: 'kg' }
+  ];
+  var alerts = [
+    { id: 1, name: 'Wheat', qty: 110, th: 120, unit: 'kg', time: '08:42', status: 'pending' }
+  ];
+  var nextAlertId = 2;
+
+  var stockEl = document.getElementById('stock');
+  var itemSel = document.getElementById('item');
+  var qtyEl = document.getElementById('qty');
+  var msgEl = document.getElementById('msg');
+  var alertsEl = document.getElementById('alerts');
+  var logEl = document.getElementById('log');
+  var form = document.getElementById('stock-form');
+
+  var statusText = { pending: 'Pending review', progress: 'Replenishment initiated', done: 'Resolved' };
+  var statusClass = { pending: 'pending', progress: 'progress', done: 'done' };
+
+  function nowTime() {
+    try { return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+    catch (e) { return '--:--'; }
+  }
+  function setMsg(text, cls) { msgEl.textContent = text; msgEl.className = 'msg' + (cls ? ' ' + cls : ''); }
+  function findItem(name) { for (var i = 0; i < items.length; i++) if (items[i].name === name) return items[i]; return null; }
+  function openAlertFor(name) {
+    for (var i = 0; i < alerts.length; i++) if (alerts[i].name === name && alerts[i].status !== 'done') return alerts[i];
+    return null;
+  }
+
+  function render() {
+    stockEl.innerHTML = items.map(function (it) {
+      var low = it.qty <= it.th;
+      var pct = Math.max(0, Math.min(100, (it.qty / it.cap) * 100));
+      var tick = Math.min(100, (it.th / it.cap) * 100);
+      return '<div class="stock-row' + (low ? ' low' : '') + '">' +
+        '<div class="stock-top"><b>' + it.name + '</b>' +
+        '<span class="qty">' + it.qty + ' <small>' + it.unit + ' &middot; threshold ' + it.th + '</small></span>' +
+        '<span class="pill ' + (low ? 'low' : 'ok') + '">' + (low ? 'Low stock' : 'In stock') + '</span></div>' +
+        '<div class="gauge" role="img" aria-label="' + it.name + ' ' + it.qty + ' of ' + it.cap + ' ' + it.unit + ', threshold ' + it.th + '">' +
+        '<div class="fill" style="width:' + pct + '%"></div><div class="tick" style="left:' + tick + '%"></div></div></div>';
+    }).join('');
+
+    if (!alerts.length) {
+      alertsEl.innerHTML = '<p class="empty">No alerts yet. Every commodity is above its threshold.</p>';
+    } else {
+      alertsEl.innerHTML = '<ul class="alert-list">' + alerts.map(function (a) {
+        return '<li><div class="alert-top"><b>' + a.name + ' is low</b>' +
+          '<span class="pill ' + statusClass[a.status] + '">' + statusText[a.status] + '</span></div>' +
+          '<span class="alert-meta">' + a.qty + ' ' + a.unit + ' left &middot; threshold ' + a.th + ' &middot; raised ' + a.time + '</span>' +
+          (a.status === 'pending' ? '<div><button type="button" class="btn-sm" data-alert="' + a.id + '">Initiate replenishment</button></div>' : '') +
+          '</li>';
+      }).join('') + '</ul>';
+    }
+
+    logEl.innerHTML = log.map(function (l) {
+      var sign = l.delta < 0 ? 'minus' : 'plus';
+      var txt = (l.delta < 0 ? '−' : '+') + Math.abs(l.delta) + ' ' + l.unit;
+      return '<li><span class="t">' + l.t + '</span><span>' + l.name + (l.delta < 0 ? ' issued' : ' received') + '</span><span class="d ' + sign + '">' + txt + '</span></li>';
+    }).join('');
+  }
+
+  itemSel.innerHTML = items.map(function (it) { return '<option value="' + it.name + '">' + it.name + ' (' + it.unit + ')</option>'; }).join('');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var it = findItem(itemSel.value);
+    var kind = form.elements.kind.value;
+    var q = Number(qtyEl.value);
+    if (!qtyEl.value || !isFinite(q) || q < 1 || Math.floor(q) !== q) { setMsg('Enter a whole number of 1 or more.', 'err'); return; }
+    if (kind === 'issued' && q > it.qty) { setMsg('Only ' + it.qty + ' ' + it.unit + ' of ' + it.name + ' is in stock. Enter a smaller quantity.', 'err'); return; }
+    if (kind === 'received' && it.qty + q > it.cap) { setMsg('This would go over the shop capacity of ' + it.cap + ' ' + it.unit + '. Enter a smaller quantity.', 'err'); return; }
+
+    var delta = kind === 'issued' ? -q : q;
+    it.qty += delta;
+    log.unshift({ t: nowTime(), name: it.name, delta: delta, unit: it.unit });
+    if (log.length > 8) log.length = 8;
+
+    var existing = openAlertFor(it.name);
+    if (it.qty <= it.th) {
+      if (existing) {
+        existing.qty = it.qty;
+        setMsg('Balance is ' + it.qty + ' ' + it.unit + ', still at or below the threshold of ' + it.th + '. The alert is already open.', 'warn');
+      } else {
+        alerts.unshift({ id: nextAlertId++, name: it.name, qty: it.qty, th: it.th, unit: it.unit, time: nowTime(), status: 'pending' });
+        setMsg('Balance is ' + it.qty + ' ' + it.unit + ', at or below the threshold of ' + it.th + '. Low-stock alert generated.', 'warn');
+      }
+    } else {
+      if (existing) {
+        existing.status = 'done';
+        setMsg('Balance is ' + it.qty + ' ' + it.unit + ', above the threshold. The ' + it.name + ' alert is resolved.', 'good');
+      } else {
+        setMsg('Stock updated. Balance is ' + it.qty + ' ' + it.unit + ', above the threshold of ' + it.th + '.', 'good');
+      }
+    }
+    qtyEl.value = '';
+    render();
+  });
+
+  alertsEl.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('button[data-alert]') : null;
+    if (!btn) return;
+    var id = Number(btn.getAttribute('data-alert'));
+    for (var i = 0; i < alerts.length; i++) if (alerts[i].id === id) alerts[i].status = 'progress';
+    render();
+  });
+
+  render();
+})();
+</script>
